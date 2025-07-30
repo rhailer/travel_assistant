@@ -12,7 +12,6 @@ class SimpleTravelAssistant:
         try:
             if 'OPENAI_API_KEY' in st.secrets:
                 self.api_key = st.secrets["OPENAI_API_KEY"]
-                st.success("✅ API key configured")
             else:
                 st.error("❌ API key not found in secrets")
         except Exception as e:
@@ -138,19 +137,15 @@ def main():
             font-size: 1.2rem;
             margin-bottom: 2rem;
         }
-        .info-box {
-            background-color: #f8f9fa;
-            padding: 1.5rem;
+        .trip-info {
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            color: white;
+            padding: 1rem;
             border-radius: 10px;
-            border-left: 4px solid #3498db;
+            text-align: center;
             margin: 1rem 0;
-        }
-        .recommendation-container {
-            background-color: #ffffff;
-            padding: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin: 2rem 0;
+            font-size: 1.1rem;
+            font-weight: bold;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -172,11 +167,11 @@ def main():
         4. Save and restart the app
         """)
         return
+    else:
+        st.success("✅ API key configured")
     
-    # Get current date for date inputs
+    # Get current date
     today = datetime.now().date()
-    tomorrow = today + timedelta(days=1)
-    week_later = today + timedelta(days=7)
     
     # Input form
     with st.form("travel_form"):
@@ -189,27 +184,44 @@ def main():
             help="Enter your dream luxury destination"
         )
         
-        # Date inputs
+        # Date inputs - FIXED VERSION
+        st.markdown("#### 📅 Travel Dates")
         col1, col2 = st.columns(2)
         
         with col1:
             start_date = st.date_input(
-                "📅 Start Date", 
-                value=tomorrow,
+                "Start Date", 
+                value=today + timedelta(days=1),  # Default to tomorrow
                 min_value=today,
                 help="When does your luxury journey begin?"
             )
         
         with col2:
-            min_end_date = start_date + timedelta(days=1) if start_date else tomorrow
-            default_end_date = max(min_end_date, week_later)
+            # Calculate suggested end date (7 days after start date)
+            if start_date:
+                suggested_end = start_date + timedelta(days=7)
+                min_end = start_date + timedelta(days=1)
+            else:
+                suggested_end = today + timedelta(days=8)
+                min_end = today + timedelta(days=2)
             
             end_date = st.date_input(
-                "📅 End Date", 
-                value=default_end_date,
-                min_value=min_end_date,
+                "End Date", 
+                value=suggested_end,
+                min_value=min_end,
                 help="When does your luxury journey end?"
             )
+        
+        # Show trip duration
+        if start_date and end_date and end_date > start_date:
+            duration = (end_date - start_date).days
+            st.markdown(f"""
+            <div class="trip-info">
+            ✈️ {duration}-day luxury journey from {start_date.strftime('%B %d')} to {end_date.strftime('%B %d, %Y')}
+            </div>
+            """, unsafe_allow_html=True)
+        elif start_date and end_date and end_date <= start_date:
+            st.warning("⚠️ Please select an end date after your start date")
         
         # Submit button
         submitted = st.form_submit_button("🎯 Generate Luxury Recommendations", type="primary")
@@ -218,6 +230,8 @@ def main():
     if submitted:
         if not destination.strip():
             st.error("Please enter a destination!")
+        elif not start_date or not end_date:
+            st.error("Please select both start and end dates!")
         elif start_date >= end_date:
             st.error("End date must be after start date!")
         else:
@@ -240,9 +254,8 @@ def main():
                 
                 st.markdown("---")
                 
-                # Show recommendations in a nice container
-                with st.container():
-                    st.markdown(f'<div class="recommendation-container">{recommendations}</div>', unsafe_allow_html=True)
+                # Show recommendations
+                st.markdown(recommendations)
                 
                 # Success message
                 st.success("✅ Your luxury recommendations are ready!")
@@ -251,7 +264,7 @@ def main():
                 if st.button("🌟 Plan Another Luxury Trip"):
                     st.rerun()
     
-    # Info section
+    # Info section when no form submitted
     else:
         st.markdown("---")
         st.markdown("### ✨ What Makes This Special:")
@@ -284,20 +297,6 @@ def main():
             - Luxury transportation & transfers
             - Insider experiences & hidden gems
             """)
-        
-        # How it works
-        st.markdown("---")
-        st.markdown("""
-        ### 🎯 Your Luxury Journey Process:
-        
-        1. **🗺️ Choose Your Destination** - From bustling metropolises to secluded paradises
-        2. **📅 Select Your Dates** - We consider seasons, events, and optimal timing  
-        3. **🤖 AI Curation** - Our AI analyzes thousands of luxury options
-        4. **💎 Receive Recommendations** - Detailed, actionable luxury travel plan
-        5. **✈️ Travel in Style** - Enjoy your perfectly curated luxury experience
-        
-        *All recommendations focus on ultra-luxury experiences for discerning travelers with premium budgets.*
-        """)
 
 if __name__ == "__main__":
     main()
