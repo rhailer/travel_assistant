@@ -1,23 +1,51 @@
 import os
+import streamlit as st
 from datetime import datetime
 import json
 
 class TravelAssistant:
     def __init__(self):
         self.client = None
-        self.api_key = os.getenv("OPENAI_API_KEY")
+        
+        # Try to get API key from Streamlit secrets first, then environment
+        try:
+            if hasattr(st, 'secrets') and 'OPENAI_API_KEY' in st.secrets:
+                self.api_key = st.secrets["OPENAI_API_KEY"]
+                print("✅ API key loaded from Streamlit secrets")
+            else:
+                self.api_key = os.getenv("OPENAI_API_KEY")
+                print("✅ API key loaded from environment")
+        except Exception as e:
+            print(f"⚠️ Error loading API key: {e}")
+            self.api_key = None
         
         if not self.api_key:
-            print("⚠️  OpenAI API key not found!")
+            print("❌ No API key found!")
             return
             
         try:
             from openai import OpenAI
             self.client = OpenAI(api_key=self.api_key)
             print("✅ OpenAI client initialized successfully")
+            
+            # Test the connection with a simple API call
+            self._test_connection()
+            
         except Exception as e:
             print(f"❌ Failed to initialize OpenAI client: {e}")
             self.client = None
+    
+    def _test_connection(self):
+        """Test the OpenAI API connection"""
+        try:
+            # Make a simple test call
+            response = self.client.models.list()
+            print("✅ OpenAI API connection test successful")
+            return True
+        except Exception as e:
+            print(f"❌ OpenAI API connection test failed: {e}")
+            self.client = None
+            return False
     
     def get_season(self, date_str):
         """Determine season based on date"""
@@ -42,7 +70,7 @@ class TravelAssistant:
         # Check if client is initialized
         if not self.client:
             return {
-                "error": "OpenAI client not initialized. Please check your API key.",
+                "error": "OpenAI client not initialized. Please check your API key in Streamlit secrets.",
                 "destination_overview": f"Unable to connect to OpenAI API for {destination} recommendations.",
                 "weather": "Please check local weather forecasts manually.",
                 "luxury_hotels": [
@@ -56,7 +84,7 @@ class TravelAssistant:
                 "exclusive_experiences": [],
                 "luxury_shopping": [],
                 "transportation": [],
-                "seasonal_highlights": ["Check your .env file for OPENAI_API_KEY"],
+                "seasonal_highlights": ["Check your API key configuration"],
                 "insider_tips": ["Ensure your API key starts with 'sk-' and is valid"]
             }
         
@@ -120,23 +148,14 @@ class TravelAssistant:
             ]
         }}
 
-        Focus on:
-        - Ultra-luxury accommodations (5-star hotels, luxury resorts)
-        - Michelin-starred restaurants and exclusive dining experiences
-        - Private tours, VIP access, and unique experiences
-        - High-end shopping and exclusive boutiques
-        - Premium transportation options
-        - Seasonal considerations and weather-appropriate activities
-        - Insider knowledge for luxury travelers
-
-        Provide specific names, realistic price ranges, and detailed descriptions. Respond ONLY with valid JSON.
+        Focus on luxury accommodations, Michelin-starred restaurants, exclusive experiences, high-end shopping, and premium transportation. Respond ONLY with valid JSON.
         """
         
         try:
             print(f"🔄 Generating recommendations for {destination}...")
             
             response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",  # Using 3.5-turbo as it's more stable and cost-effective
+                model="gpt-3.5-turbo",
                 messages=[
                     {
                         "role": "system", 
@@ -175,7 +194,7 @@ class TravelAssistant:
                     raise json.JSONDecodeError("No JSON found", content, 0)
                     
             except json.JSONDecodeError as e:
-                print(f"⚠️  JSON parsing failed: {e}")
+                print(f"⚠️ JSON parsing failed: {e}")
                 return self._create_fallback_response(content, destination, season)
                 
         except Exception as e:
@@ -188,7 +207,7 @@ class TravelAssistant:
                     {
                         "name": "Service Temporarily Unavailable",
                         "price_range": "N/A",
-                        "description": "Please try again in a moment."
+                        "description": f"API Error: {str(e)}"
                     }
                 ],
                 "fine_dining": [],
@@ -196,7 +215,7 @@ class TravelAssistant:
                 "luxury_shopping": [],
                 "transportation": [],
                 "seasonal_highlights": ["Please try again later"],
-                "insider_tips": ["Check your internet connection and API credits"]
+                "insider_tips": ["Check your API key and credits"]
             }
     
     def _create_fallback_response(self, content, destination, season):

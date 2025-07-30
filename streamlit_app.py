@@ -5,6 +5,24 @@ import threading
 import time
 from travel_assistant import TravelAssistant
 
+def check_api_key():
+    """Check if OpenAI API key is configured"""
+    try:
+        if 'OPENAI_API_KEY' in st.secrets:
+            api_key = st.secrets["OPENAI_API_KEY"]
+            if api_key and api_key.startswith('sk-'):
+                st.success("✅ OpenAI API key found in secrets")
+                return True
+            else:
+                st.error("❌ Invalid API key format in secrets")
+                return False
+        else:
+            st.error("❌ OPENAI_API_KEY not found in secrets")
+            return False
+    except Exception as e:
+        st.error(f"❌ Error accessing secrets: {e}")
+        return False
+    
 # Page configuration
 st.set_page_config(
     page_title="Luxury Travel Assistant",
