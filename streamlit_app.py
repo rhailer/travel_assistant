@@ -1,63 +1,117 @@
 import streamlit as st
-import os
+import requests
+import json
 from datetime import datetime, timedelta
-import time
 
-# Simple travel assistant without complex state management
 class SimpleTravelAssistant:
     def __init__(self):
-        self.client = None
         self.api_key = None
+        self.base_url = "https://api.openai.com/v1/chat/completions"
         
         # Get API key from Streamlit secrets
         try:
             if 'OPENAI_API_KEY' in st.secrets:
                 self.api_key = st.secrets["OPENAI_API_KEY"]
+                st.success("✅ API key configured")
             else:
-                self.api_key = os.getenv("OPENAI_API_KEY")
-        except:
-            self.api_key = None
-        
-        if self.api_key:
-            try:
-                from openai import OpenAI
-                self.client = OpenAI(api_key=self.api_key)
-            except Exception as e:
-                st.error(f"Failed to initialize OpenAI: {e}")
+                st.error("❌ API key not found in secrets")
+        except Exception as e:
+            st.error(f"❌ Error accessing secrets: {e}")
     
     def generate_recommendations(self, destination, start_date, end_date):
-        if not self.client:
-            return "❌ OpenAI client not initialized. Please check your API key."
+        if not self.api_key:
+            return "❌ OpenAI API key not configured. Please check your Streamlit secrets."
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        prompt = f"""
+        You are an elite luxury travel advisor with expertise in ultra-high-end destinations worldwide. 
+        
+        Create comprehensive luxury travel recommendations for {destination} from {start_date} to {end_date}.
+        
+        Please provide detailed information in these categories:
+        
+        🏨 **LUXURY ACCOMMODATIONS** (3-5 options)
+        - Ultra-luxury hotels, resorts, and boutique properties
+        - Approximate nightly rates in USD
+        - Unique features and why they're special
+        - Booking recommendations
+        
+        🍽️ **FINE DINING EXPERIENCES** (5-7 restaurants)
+        - Michelin-starred establishments
+        - Celebrity chef restaurants
+        - Unique culinary experiences
+        - Price ranges per person
+        - Reservation tips
+        
+        ✨ **EXCLUSIVE EXPERIENCES** (5-8 activities)
+        - VIP tours and private access
+        - Luxury wellness and spa treatments
+        - Private cultural experiences
+        - Adventure activities (luxury level)
+        - Approximate costs
+        
+        🛍️ **LUXURY SHOPPING**
+        - High-end boutiques and designer stores
+        - Local luxury markets
+        - Exclusive shopping districts
+        - Personal shopping services
+        
+        🚗 **PREMIUM TRANSPORTATION**
+        - Luxury car services
+        - Private transfers
+        - Helicopter/private jet options
+        - Chauffeur services
+        
+        🌤️ **WEATHER & PACKING**
+        - Expected weather conditions
+        - What to pack for luxury activities
+        - Seasonal considerations
+        
+        💎 **INSIDER SECRETS**
+        - Hidden luxury gems only locals know
+        - Best times to visit popular attractions
+        - VIP access tips
+        - Cultural etiquette for luxury travelers
+        
+        Format the response with clear headings, specific venue names, realistic prices, and actionable advice.
+        Make it comprehensive yet easy to read.
+        """
+        
+        data = {
+            "model": "gpt-3.5-turbo",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are the world's leading luxury travel advisor, with exclusive access to the finest hotels, restaurants, and experiences globally. You specialize in ultra-high-end travel for discerning clients with substantial budgets."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "max_tokens": 3000,
+            "temperature": 0.7
+        }
         
         try:
-            prompt = f"""
-            You are a luxury travel advisor. Provide detailed luxury travel recommendations for {destination} 
-            from {start_date} to {end_date}. Include:
+            response = requests.post(self.base_url, headers=headers, json=data, timeout=30)
+            response.raise_for_status()
             
-            🏨 LUXURY HOTELS (3-5 options with approximate prices per night)
-            🍽️ FINE DINING (Michelin-starred restaurants with price ranges)
-            ✨ EXCLUSIVE EXPERIENCES (VIP tours, private access with costs)
-            🛍️ LUXURY SHOPPING (high-end boutiques, designer stores)
-            🚗 PREMIUM TRANSPORTATION (luxury car services, private transfers)
-            🌤️ WEATHER & PACKING ADVICE for the season
-            💡 INSIDER TIPS (local secrets, best times to visit)
+            result = response.json()
+            content = result['choices'][0]['message']['content']
             
-            Make it detailed and specific with actual names, addresses where possible, and realistic prices.
-            Focus on ultra-luxury experiences for high-end travelers.
-            """
+            return content
             
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are an expert luxury travel advisor with extensive knowledge of high-end destinations, 5-star hotels, Michelin restaurants, and exclusive experiences worldwide."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=2500,
-                temperature=0.7
-            )
-            
-            return response.choices[0].message.content
-            
+        except requests.exceptions.Timeout:
+            return "❌ Request timed out. Please try again."
+        except requests.exceptions.RequestException as e:
+            return f"❌ Error connecting to OpenAI API: {str(e)}"
+        except KeyError:
+            return "❌ Unexpected response format from OpenAI API."
         except Exception as e:
             return f"❌ Error generating recommendations: {str(e)}"
 
@@ -69,7 +123,7 @@ def main():
         layout="wide"
     )
     
-    # Custom CSS for better styling
+    # Custom CSS
     st.markdown("""
     <style>
         .main-title {
@@ -91,40 +145,33 @@ def main():
             border-left: 4px solid #3498db;
             margin: 1rem 0;
         }
-        .stButton > button {
-            background-color: #3498db;
-            color: white;
-            font-weight: bold;
+        .recommendation-container {
+            background-color: #ffffff;
+            padding: 2rem;
             border-radius: 10px;
-            border: none;
-            padding: 0.75rem 2rem;
-            font-size: 1.1rem;
-            width: 100%;
-        }
-        .stButton > button:hover {
-            background-color: #2980b9;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin: 2rem 0;
         }
     </style>
     """, unsafe_allow_html=True)
     
     # Title
     st.markdown('<h1 class="main-title">✈️ Luxury Travel Assistant</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">AI-Powered Luxury Travel Recommendations</p>', unsafe_allow_html=True)
-    
-    # Check API key
-    try:
-        if 'OPENAI_API_KEY' not in st.secrets:
-            st.error("🔑 Please add your OpenAI API key to Streamlit secrets!")
-            st.info("Go to App Settings → Secrets and add: OPENAI_API_KEY = 'your-key-here'")
-            return
-        else:
-            st.success("✅ API key configured")
-    except:
-        st.error("❌ Could not access Streamlit secrets")
-        return
+    st.markdown('<p class="subtitle">AI-Powered Ultra-Luxury Travel Recommendations</p>', unsafe_allow_html=True)
     
     # Initialize assistant
     assistant = SimpleTravelAssistant()
+    
+    # Only proceed if API key is configured
+    if not assistant.api_key:
+        st.error("🔑 Please configure your OpenAI API key in Streamlit Cloud:")
+        st.markdown("""
+        1. Go to your app dashboard on Streamlit Cloud
+        2. Click on "Settings" → "Secrets"
+        3. Add: `OPENAI_API_KEY = "your-api-key-here"`
+        4. Save and restart the app
+        """)
+        return
     
     # Get current date for date inputs
     today = datetime.now().date()
@@ -138,11 +185,11 @@ def main():
         # Destination input
         destination = st.text_input(
             "🏖️ Destination", 
-            placeholder="e.g., Paris, Tokyo, Maldives, Swiss Alps...",
+            placeholder="e.g., Paris, Tokyo, Maldives, Swiss Alps, Dubai...",
             help="Enter your dream luxury destination"
         )
         
-        # Date inputs in columns
+        # Date inputs
         col1, col2 = st.columns(2)
         
         with col1:
@@ -154,7 +201,6 @@ def main():
             )
         
         with col2:
-            # Ensure end_date is always after start_date
             min_end_date = start_date + timedelta(days=1) if start_date else tomorrow
             default_end_date = max(min_end_date, week_later)
             
@@ -175,103 +221,82 @@ def main():
         elif start_date >= end_date:
             st.error("End date must be after start date!")
         else:
-            # Calculate trip duration
             duration = (end_date - start_date).days
             
-            with st.spinner(f"🔄 Curating luxury recommendations for your {duration}-day journey to {destination}..."):
+            with st.spinner(f"🔄 Curating exclusive luxury recommendations for your {duration}-day journey to {destination}..."):
                 recommendations = assistant.generate_recommendations(
                     destination.strip(), 
                     start_date.strftime("%Y-%m-%d"), 
                     end_date.strftime("%Y-%m-%d")
                 )
                 
-                st.success("✅ Your luxury recommendations are ready!")
-                
                 # Display results
                 st.markdown("---")
                 
-                # Header for results
-                col1, col2, col3 = st.columns([1, 2, 1])
-                with col2:
-                    st.markdown(f"## 🏖️ {destination}")
-                    st.markdown(f"**📅 {start_date.strftime('%B %d, %Y')} - {end_date.strftime('%B %d, %Y')}**")
-                    st.markdown(f"**⏰ {duration} days of luxury**")
+                # Header
+                st.markdown(f"## 🏖️ {destination}")
+                st.markdown(f"**📅 {start_date.strftime('%B %d, %Y')} - {end_date.strftime('%B %d, %Y')}**")
+                st.markdown(f"**⏰ {duration} days of luxury**")
                 
                 st.markdown("---")
                 
-                # Show recommendations
+                # Show recommendations in a nice container
                 with st.container():
-                    st.markdown(recommendations)
+                    st.markdown(f'<div class="recommendation-container">{recommendations}</div>', unsafe_allow_html=True)
                 
-                # Add a "Plan Another Trip" button
-                st.markdown("---")
+                # Success message
+                st.success("✅ Your luxury recommendations are ready!")
+                
+                # Option to generate new recommendations
                 if st.button("🌟 Plan Another Luxury Trip"):
                     st.rerun()
     
-    # Info section when no form is submitted
+    # Info section
     else:
         st.markdown("---")
-        
-        # Feature highlights
-        st.markdown("### ✨ Your Luxury Travel Experience Includes:")
+        st.markdown("### ✨ What Makes This Special:")
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
             st.markdown("""
-            <div class="info-box">
-            <h4>🏨 Ultra-Luxury Stays</h4>
-            <ul>
-            <li>5-star hotels & resorts</li>
-            <li>Boutique luxury properties</li>
-            <li>Private villas & suites</li>
-            <li>Exclusive member clubs</li>
-            </ul>
-            </div>
-            """, unsafe_allow_html=True)
+            **🏨 Ultra-Luxury Stays**
+            - 5-star hotels & exclusive resorts
+            - Private villas & boutique properties
+            - Member-only clubs & hideaways
+            - Personalized service & amenities
+            """)
         
         with col2:
             st.markdown("""
-            <div class="info-box">
-            <h4>🍽️ World-Class Dining</h4>
-            <ul>
-            <li>Michelin-starred restaurants</li>
-            <li>Celebrity chef experiences</li>
-            <li>Private dining experiences</li>
-            <li>Wine & culinary tours</li>
-            </ul>
-            </div>
-            """, unsafe_allow_html=True)
+            **🍽️ World-Class Dining**
+            - Michelin-starred restaurants  
+            - Celebrity chef experiences
+            - Private dining & wine tastings
+            - Exclusive culinary adventures
+            """)
         
         with col3:
             st.markdown("""
-            <div class="info-box">
-            <h4>✨ Exclusive Experiences</h4>
-            <ul>
-            <li>VIP tours & skip-the-line access</li>
-            <li>Private guides & concierge</li>
-            <li>Luxury transportation</li>
-            <li>Insider local experiences</li>
-            </ul>
-            </div>
-            """, unsafe_allow_html=True)
+            **✨ Exclusive Access**
+            - VIP tours & skip-the-line privileges
+            - Private guides & concierge service
+            - Luxury transportation & transfers
+            - Insider experiences & hidden gems
+            """)
         
-        # Additional info
+        # How it works
         st.markdown("---")
         st.markdown("""
-        ### 🎯 How It Works:
-        1. **Enter your dream destination** - anywhere in the world
-        2. **Select your travel dates** - we'll consider seasonal factors
-        3. **Get personalized luxury recommendations** - tailored to high-end travelers
-        4. **Enjoy your perfect luxury getaway** - with insider tips and exclusive access
-        """)
+        ### 🎯 Your Luxury Journey Process:
         
-        st.markdown("""
-        ### 💡 Pro Tips:
-        - Our AI considers seasonal factors, local events, and weather
-        - All recommendations focus on luxury and premium experiences
-        - Prices are estimates - actual costs may vary
-        - Book luxury experiences well in advance for best availability
+        1. **🗺️ Choose Your Destination** - From bustling metropolises to secluded paradises
+        2. **📅 Select Your Dates** - We consider seasons, events, and optimal timing  
+        3. **🤖 AI Curation** - Our AI analyzes thousands of luxury options
+        4. **💎 Receive Recommendations** - Detailed, actionable luxury travel plan
+        5. **✈️ Travel in Style** - Enjoy your perfectly curated luxury experience
+        
+        *All recommendations focus on ultra-luxury experiences for discerning travelers with premium budgets.*
         """)
 
 if __name__ == "__main__":
